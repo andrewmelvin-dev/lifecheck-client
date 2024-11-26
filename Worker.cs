@@ -2,23 +2,23 @@ namespace lifecheck_client;
 
 using System;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 
 public class Worker : BackgroundService {
 	private readonly string _url = "";
 	private readonly string _apiKey = "";
 
+	private readonly IHostApplicationLifetime _hostApplicationLifetime;
 	private readonly ILogger<Worker> _logger;
 	private readonly HttpClient _httpClient;
 	private readonly int MAX_ATTEMPTS = 3;
 	private readonly int DELAY_BETWEEN_ATTEMPTS = 360000;
 
-	public Worker(ILogger<Worker> logger) {
+	public Worker(ILogger<Worker> logger, IHostApplicationLifetime hostApplicationLifetime) {
+		_hostApplicationLifetime = hostApplicationLifetime;
 		_logger = logger;
 		_httpClient = new HttpClient();
 	}
@@ -33,7 +33,7 @@ public class Worker : BackgroundService {
 
 			int attempt = 0;
 			while (!stoppingToken.IsCancellationRequested && ++attempt <= MAX_ATTEMPTS) {
-				var response = await SendPostRequest();
+				HttpResponseMessage response = await SendPostRequest();
 
 				// Stop the service if the response was successful
 				if (response.IsSuccessStatusCode) {
@@ -41,10 +41,9 @@ public class Worker : BackgroundService {
 					break;
 				} else {
 					_logger.LogWarning("Request failed. Retrying...");
+					// Delay 5 minutes before retrying
+					await Task.Delay(DELAY_BETWEEN_ATTEMPTS, stoppingToken);
 				}
-
-				// Delay 5 minutes before retrying
-				await Task.Delay(DELAY_BETWEEN_ATTEMPTS, stoppingToken);
 			}
 			if (attempt > MAX_ATTEMPTS) {
 				_logger.LogError("Maximum attempts exceeded");
@@ -52,17 +51,18 @@ public class Worker : BackgroundService {
 		}
 
 		_logger.LogInformation("Service execution completed.");
+		_hostApplicationLifetime.StopApplication();
 	}
 
 	private async Task<HttpResponseMessage> SendPostRequest() {
-		var data = new {
-			apiKey = _apiKey
-		};
-		var json = JsonConvert.SerializeObject(data);
-		var content = new StringContent(json, Encoding.UTF8, "application/json");
-
 		try {
-			var response = await _httpClient.PostAsync(_url, content);
+			HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post, _url);
+
+			// Include the API key in the "x-api-key" header
+			request.Headers.Add("x-api-key", _apiKey);
+
+			// Send the request
+			HttpResponseMessage response = await _httpClient.SendAsync(request);
 			return response;
 		} catch (Exception ex) {
 			_logger.LogError($"Error sending POST request: {ex.Message}");

@@ -37,19 +37,23 @@ This `lifecheck-client` project contains .NET C# code that will send a POST requ
 4. **Build the service:**
    * Open PowerShell in your project directory.
    * Run the following command to build the service: `dotnet build -c Release`
-      * Set the `_url` property to the value of the `LifecheckVerificationUrl` parameter that was output from the deployment of the `lifecheck-aws` project.
-      * Set the `_apiKey` property to the value of the `LifecheckApiKey` parameter that was output from the deployment of the `lifecheck-aws` project.
 
 5. **Install the service:**
-   * Open PowerShell in your project directory.
-   * Run the following command to install the service: `New-Service -Name "LifecheckClient" -Binary ".\bin\Release\netcoreapp3.1\win-x64\publish\LifecheckClient.exe"`
+   * Open PowerShell as an Administrator in your project directory.
+   * Note: Modify the <path> in the command below with the absolute path to the built service.
+   * Run the following command to install the service: `New-Service -Name "LifecheckClient" -Binary "<path>\lifecheck-client.exe"`
+   * Run the following command to configure the service to start at Windows startup: `Set-Service -Name "LifecheckClient" -StartupType Automatic`
 
 6. **Run the service:**
    * Open PowerShell.
-   * Run the following command to start the service: `Set-Service -Name "LifecheckClient" -StartupType Automatic`
+   * Run the following command to start the service: `Start-Service -Name "LifecheckClient"`
 
 ## File overview ##
 
+### Program.cs ###
+
+Configures the app to run as a Windows service and starts the Worker.cs background service.
+
 ### Worker.cs ###
 
-This is the class that performs a POST request to the AWS verification endpoint when the service starts.
+This is the class that performs a POST request to the AWS verification endpoint. It will make three attempts to contact AWS and wait 5 minutes between each attempt.
